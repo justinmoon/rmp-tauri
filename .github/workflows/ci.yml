@@ -1,0 +1,67 @@
+jobs:
+  flake:
+    name: Flake self-check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Check Nix flake inputs
+      uses: DeterminateSystems/flake-checker-action@v5
+      with:
+        fail-mode: true
+
+  rust-pipeline:
+    name: Rust Pipeline
+    environment: "Github Actions"
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        host:
+        - macos-aarch64
+        # - linux
+        include:
+        # - host: linux
+        #   # runs-on: ubuntu-latest
+        #   runs-on: buildjet-8vcpu-ubuntu-2204
+        #   timeout: 60
+        - host: macos-aarch64
+          runs-on: macos-14
+          timeout: 60
+    timeout-minutes: ${{ matrix.timeout }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install Nix
+      uses: DeterminateSystems/nix-installer-action@v4
+    - name: Setup Cachix
+      uses: cachix/cachix-action@v12
+      with:
+        name: justinmoon
+        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'
+    - name: Cargo Cache
+      uses: actions/cache@v3
+      with:
+        key: ${{ runner.os }}-${{ matrix.host }}-${{ hashFiles('Cargo.lock') }}
+        path: ~/.cargo
+
+    - name: Build dev shell
+      run: 'nix develop'
+
+    - name: Build app
+      run: 'nix develop --ignore-environment .# --command bash scripts/build-macos.sh'
+
+name: CI
+'on':
+  merge_group:
+    branches:
+    - master
+    - main
+  pull_request:
+    branches:
+    - master
+    - main
+  push:
+    branches:
+    - master
+    - main
+    tags:
+    - v*
+  workflow_dispatch: {}
